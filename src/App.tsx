@@ -62,6 +62,7 @@ function InteractiveCard({
   draggable = false,
 }: { src: string; intensity?: number; glare?: boolean; draggable?: boolean }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   // Motion values for tilt
   const mx = useMotionValue(0); // -1 .. 1
@@ -74,6 +75,14 @@ function InteractiveCard({
   const rotX = useTransform(smy, (v) => `${-v * intensity}deg`);
   const rotY = useTransform(smx, (v) => `${v * intensity}deg`);
   const translateZ = useTransform(smx, () => `30px`);
+
+  // Reset drag position when draggable is disabled
+  useEffect(() => {
+    if (!draggable && cardRef.current) {
+      // Reset the transform to center position
+      cardRef.current.style.transform = cardRef.current.style.transform.replace(/translate3d\([^)]*\)/g, 'translate3d(0px, 0px, 0px)');
+    }
+  }, [draggable]);
 
   // Shine position
   const shineX = useTransform(smx, (v) => `${(v + 1) * 50}%`);
@@ -90,6 +99,32 @@ function InteractiveCard({
   }
   function resetTilt() {
     mx.set(0); my.set(0);
+  }
+
+  // Handle touch events to prevent scrolling
+  function handleTouchStart(e: React.TouchEvent) {
+    // Prevent scrolling when touching the card
+    e.preventDefault();
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    // Prevent scrolling during touch move on the card
+    e.preventDefault();
+
+    // Convert touch to pointer-like event for tilt
+    const touch = e.touches[0];
+    if (touch && containerRef.current) {
+      const bounds = containerRef.current.getBoundingClientRect();
+      const px = (touch.clientX - bounds.left) / bounds.width;
+      const py = (touch.clientY - bounds.top) / bounds.height;
+      mx.set(px * 2 - 1);
+      my.set(py * 2 - 1);
+    }
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    e.preventDefault();
+    resetTilt();
   }
 
   // Optional: device orientation for mobile tilt
@@ -128,15 +163,25 @@ function InteractiveCard({
         onPointerLeave={() => resetTilt()}
         onPointerCancel={() => resetTilt()}
         onPointerUp={() => resetTilt()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ touchAction: 'none' }}
       >
         <motion.div
-          style={{ rotateX: rotX, rotateY: rotY, transformStyle: "preserve-3d" }}
+          ref={cardRef}
+          style={{
+            rotateX: rotX,
+            rotateY: rotY,
+            transformStyle: "preserve-3d"
+          }}
           className="relative h-[380px] w-[620px] max-w-[90vw] overflow-hidden rounded-3xl shadow-2xl"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.995 }}
           drag={draggable}
           dragElastic={0.06}
           dragConstraints={{ left: -30, right: 30, top: -30, bottom: 30 }}
+          dragMomentum={false}
         >
           {/* Image layer */}
           <motion.img
