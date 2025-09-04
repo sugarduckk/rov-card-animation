@@ -59,7 +59,8 @@ function InteractiveCard({
   src,
   intensity = 18,
   glare = true,
-}: { src: string; intensity?: number; glare?: boolean }) {
+  draggable = false,
+}: { src: string; intensity?: number; glare?: boolean; draggable?: boolean }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Motion values for tilt
@@ -133,7 +134,7 @@ function InteractiveCard({
           className="relative h-[380px] w-[620px] max-w-[90vw] overflow-hidden rounded-3xl shadow-2xl"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.995 }}
-          drag
+          drag={draggable}
           dragElastic={0.06}
           dragConstraints={{ left: -30, right: 30, top: -30, bottom: 30 }}
         >
@@ -182,6 +183,7 @@ export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [intensity, setIntensity] = useState(18);
   const [glare, setGlare] = useState(true);
+  const [dragEnabled, setDragEnabled] = useState(false);
   const url = useObjectUrl(file);
 
   return (
@@ -220,7 +222,7 @@ export default function App() {
                 <CardTitle>2) Play with the card</CardTitle>
               </CardHeader>
               <CardContent>
-                <InteractiveCard src={url} intensity={intensity} glare={glare} />
+                <InteractiveCard src={url} intensity={intensity} glare={glare} draggable={dragEnabled} />
               </CardContent>
             </Card>
 
@@ -248,6 +250,13 @@ export default function App() {
                     <span className="text-sm font-medium">Glare / shine</span>
                     <Button variant={glare ? "default" : "secondary"} onClick={() => setGlare((g) => !g)}>
                       {glare ? "On" : "Off"}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Drag</span>
+                    <Button variant={dragEnabled ? "default" : "secondary"} onClick={() => setDragEnabled((d) => !d)}>
+                      {dragEnabled ? "On" : "Off"}
                     </Button>
                   </div>
 
