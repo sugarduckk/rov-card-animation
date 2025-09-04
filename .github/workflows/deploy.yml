@@ -33,6 +33,12 @@ jobs:
       - name: Build
         run: npm run build
         
+      - name: Add .nojekyll file
+        run: touch dist/.nojekyll
+        
+      - name: List dist contents (debug)
+        run: ls -la dist/
+        
       - name: Setup Pages
         uses: actions/configure-pages@v4
         
