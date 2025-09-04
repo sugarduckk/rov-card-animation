@@ -10,4 +10,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  base: '/rov-card-animation/',
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+  },
 })
