@@ -57,16 +57,49 @@ function ImagePicker({ onPick }: { onPick: (f: File) => void }) {
 // Interactive 3D Card with tilt, parallax, shine, and drag
 function InteractiveCard({
   src,
-  intensity = 18,
+  intensity = 30,
   glare = true,
   draggable = false,
 }: { src: string; intensity?: number; glare?: boolean; draggable?: boolean }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9); // Default aspect ratio
+  const [viewportWidth, setViewportWidth] = useState<number>(320); // Default viewport width
 
   // Motion values for tilt
   const mx = useMotionValue(0); // -1 .. 1
   const my = useMotionValue(0); // -1 .. 1
+
+  // Store initial device orientation for relative positioning
+  const initialOrientation = useRef<{ beta: number; gamma: number } | null>(null);
+
+  // Load image and calculate aspect ratio
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = img.width / img.height;
+      setAspectRatio(ratio);
+    };
+    img.src = src;
+  }, [src]);
+
+  // Track viewport width changes
+  useEffect(() => {
+    const updateViewportWidth = () => {
+      if (typeof window !== 'undefined') {
+        setViewportWidth(window.innerWidth);
+      }
+    };
+
+    // Set initial width
+    updateViewportWidth();
+
+    // Add resize listener
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', updateViewportWidth);
+      return () => window.removeEventListener('resize', updateViewportWidth);
+    }
+  }, []);
 
   // Smooth spring
   const smx = useSpring(mx, { stiffness: 200, damping: 20, mass: 0.5 });
@@ -75,6 +108,27 @@ function InteractiveCard({
   const rotX = useTransform(smy, (v) => `${-v * intensity}deg`);
   const rotY = useTransform(smx, (v) => `${v * intensity}deg`);
   const translateZ = useTransform(smx, () => `30px`);
+
+  // Calculate responsive dimensions based on aspect ratio and viewport
+  const getCardDimensions = () => {
+    // Use viewport-based widths with maximum constraints
+    const maxWidth = {
+      mobile: Math.min(320, viewportWidth * 0.85), // 85% of viewport, max 320px
+      sm: 400,
+      lg: 480,
+      xl: 560
+    };
+
+    // Calculate height based on aspect ratio
+    const mobile = { width: maxWidth.mobile, height: maxWidth.mobile / aspectRatio };
+    const sm = { width: maxWidth.sm, height: maxWidth.sm / aspectRatio };
+    const lg = { width: maxWidth.lg, height: maxWidth.lg / aspectRatio };
+    const xl = { width: maxWidth.xl, height: maxWidth.xl / aspectRatio };
+
+    return { mobile, sm, lg, xl };
+  };
+
+  const dimensions = getCardDimensions();
 
   // Reset drag position when draggable is disabled
   useEffect(() => {
@@ -131,14 +185,35 @@ function InteractiveCard({
   useEffect(() => {
     function onDeviceOrientation(e: DeviceOrientationEvent) {
       if (e.beta == null || e.gamma == null) return;
-      const g = Math.max(-45, Math.min(45, e.gamma)); // left/right
-      const b = Math.max(-45, Math.min(45, e.beta)); // front/back
+
+      // Capture initial orientation on first reading
+      if (!initialOrientation.current) {
+        initialOrientation.current = { beta: e.beta, gamma: e.gamma };
+        return; // Don't tilt on first reading, just establish baseline
+      }
+
+      // Calculate relative change from initial position
+      const deltaGamma = e.gamma - initialOrientation.current.gamma;
+      const deltaBeta = e.beta - initialOrientation.current.beta;
+
+      // Clamp the relative changes to reasonable ranges
+      const g = Math.max(-45, Math.min(45, deltaGamma)); // left/right
+      const b = Math.max(-45, Math.min(45, deltaBeta)); // front/back
+
       mx.set(g / 45);
       my.set(b / 45);
     }
+
+    // Reset initial orientation when component mounts
+    initialOrientation.current = null;
+
     // only attach after user gesture (first pointerdown)
     let armed = false;
-    const arm = () => { armed = true; window.removeEventListener("pointerdown", arm); };
+    const arm = () => {
+      armed = true;
+      initialOrientation.current = null; // Reset baseline when user interacts
+      window.removeEventListener("pointerdown", arm);
+    };
     window.addEventListener("pointerdown", arm);
 
     const listener = () => {
@@ -155,7 +230,7 @@ function InteractiveCard({
   }, [mx, my]);
 
   return (
-    <div className="flex w-full items-center justify-center">
+    <div className="flex w-full items-center justify-center overflow-hidden">
       <motion.div
         ref={containerRef}
         className="relative [perspective:1100px]"
@@ -173,9 +248,17 @@ function InteractiveCard({
           style={{
             rotateX: rotX,
             rotateY: rotY,
-            transformStyle: "preserve-3d"
-          }}
-          className="relative h-[380px] w-[620px] max-w-[90vw] overflow-hidden rounded-3xl shadow-2xl"
+            transformStyle: "preserve-3d",
+            width: `min(${dimensions.mobile.width}px, 85vw)`,
+            height: `${dimensions.mobile.height}px`,
+            '--sm-width': `${dimensions.sm.width}px`,
+            '--sm-height': `${dimensions.sm.height}px`,
+            '--lg-width': `${dimensions.lg.width}px`,
+            '--lg-height': `${dimensions.lg.height}px`,
+            '--xl-width': `${dimensions.xl.width}px`,
+            '--xl-height': `${dimensions.xl.height}px`,
+          } as React.CSSProperties}
+          className="relative max-w-[85vw] overflow-hidden rounded-2xl shadow-2xl sm:rounded-3xl [width:min(var(--sm-width),85vw)] [height:var(--sm-height)] lg:[width:min(var(--lg-width),85vw)] lg:[height:var(--lg-height)] xl:[width:min(var(--xl-width),85vw)] xl:[height:var(--xl-height)]"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.995 }}
           drag={draggable}
@@ -226,22 +309,22 @@ function InteractiveCard({
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [intensity, setIntensity] = useState(18);
+  const [intensity, setIntensity] = useState(30);
   const [glare, setGlare] = useState(true);
   const [dragEnabled, setDragEnabled] = useState(false);
   const url = useObjectUrl(file);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted">
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight">Interactive Card Playground</h1>
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted overflow-x-hidden">
+      <div className="mx-auto max-w-6xl px-2 py-4 sm:px-4 sm:py-6 lg:py-10 w-full">
+        <div className="mb-3 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Interactive Card Playground</h1>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => { setFile(null); }}>
               <RotateCcw className="mr-2 h-4 w-4" /> Reset
             </Button>
             <Button variant="default" onClick={() => {
-              setIntensity(18); setGlare(true);
+              setIntensity(30); setGlare(true);
             }}>
               <Wand2 className="mr-2 h-4 w-4" /> Defaults
             </Button>
@@ -261,12 +344,12 @@ export default function App() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="grid gap-3 sm:gap-4 lg:gap-6 lg:grid-cols-[1fr_360px]">
             <Card className="border-0 shadow-sm">
               <CardHeader>
                 <CardTitle>2) Play with the card</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-hidden">
                 <InteractiveCard src={url} intensity={intensity} glare={glare} draggable={dragEnabled} />
               </CardContent>
             </Card>
@@ -276,7 +359,7 @@ export default function App() {
                 <CardTitle>Tuning</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   <div>
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="font-medium">Tilt intensity</span>
@@ -320,7 +403,7 @@ export default function App() {
         )}
 
         {/* Footer */}
-        <div className="mt-8 text-center text-xs text-muted-foreground">
+        <div className="mt-4 text-center text-xs text-muted-foreground sm:mt-6 lg:mt-8">
           Built with React • Tailwind • shadcn/ui • framer-motion
         </div>
       </div>
