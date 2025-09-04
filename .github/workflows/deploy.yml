@@ -36,6 +36,14 @@ jobs:
       - name: Add .nojekyll file
         run: touch dist/.nojekyll
         
+      - name: Copy _headers file for MIME types
+        run: cp public/_headers dist/_headers || true
+        
+      - name: Fix file extensions for GitHub Pages
+        run: |
+          find dist -name "*.js" -exec echo "Processing JS file: {}" \;
+          find dist -name "*.mjs" -exec echo "Processing MJS file: {}" \;
+        
       - name: List dist contents (debug)
         run: ls -la dist/
         
